@@ -83,7 +83,7 @@ function addBookmark() {
     }
     
     // 簡易URL検証
-    if (!url.match(/^https?:\\/\\/.+/)) {
+    if (!url.match(/^https?:\/\/.+/)) {
         showToast('有効なURLを入力してください（http://またはhttps://）', 'error');
         return;
     }
@@ -176,13 +176,17 @@ function filterBookmarks() {
         return true;
     });
     
-    renderBookmarks();
+    renderBookmarksList();
 }
 
 // ブックマーク表示
 function renderBookmarks() {
     filterBookmarks();
-    
+    renderBookmarksList();
+}
+
+// ブックマーク一覧描画（フィルタリング済み）
+function renderBookmarksList() {
     const container = document.getElementById('bookmarksList');
     
     if (filteredBookmarks.length === 0) {
