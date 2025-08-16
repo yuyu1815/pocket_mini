@@ -3,23 +3,35 @@
  * ローカルストレージベースのMVP実装
  */
 
-const STORAGE_KEY = 'pocket-mini';
-let appState = {
+var STORAGE_KEY = 'pocket-mini';
+var appState = {
     bookmarks: [],
     lastExportAt: null
 };
 
-let currentView = 'active';
-let filteredBookmarks = [];
+var currentView = 'active';
+var filteredBookmarks = [];
+var isInitialized = false;
 
 // 初期化
-document.addEventListener('DOMContentLoaded', function() {
-    loadData();
-    checkURLParams();
-    renderBookmarks();
-    updateTagFilter();
-    updateStatus();
-});
+function initializeApp() {
+    if (!isInitialized) {
+        isInitialized = true;
+        loadData();
+        checkURLParams();
+        renderBookmarks();
+        updateTagFilter();
+        updateStatus();
+    }
+}
+
+// DOMContentLoadedイベントリスナーを1回だけ追加
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    // DOMContentLoadedが既に発火済みの場合
+    initializeApp();
+}
 
 // データ読み込み
 function loadData() {
@@ -54,35 +66,71 @@ function checkURLParams() {
     const addURL = urlParams.get('add');
     const title = urlParams.get('title');
     
+    console.log('checkURLParams called:', { addURL, title });
+    
     if (addURL) {
-        // URL入力欄に設定
-        document.getElementById('urlInput').value = decodeURIComponent(addURL);
+        const urlInput = document.getElementById('urlInput');
+        const titleInput = document.getElementById('titleInput');
+        
+        if (!urlInput || !titleInput) {
+            setTimeout(checkURLParams, 100);
+            return;
+        }
+        
+        // URL入力欄に設定（エンコードされたまま保存）
+        urlInput.value = addURL;
         if (title) {
-            document.getElementById('titleInput').value = decodeURIComponent(title);
+            titleInput.value = decodeURIComponent(title);
+        } else {
+            // タイトルが渡されていない場合は、URLからホスト名を自動設定
+            try {
+                const urlObj = new URL(decodeURIComponent(addURL));
+                titleInput.value = urlObj.hostname;
+            } catch (e) {
+                // URL解析に失敗した場合は空のまま
+            }
         }
         
         // 自動保存
         setTimeout(() => {
-            addBookmark();
-            // URLパラメータをクリア
-            window.history.replaceState({}, document.title, window.location.pathname);
+            if (urlInput.value.trim()) {
+                addBookmark();
+                // URLパラメータをクリア
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
         }, 100);
     }
 }
 
 // ブックマーク追加
 function addBookmark() {
+    console.log('addBookmark called');
     const urlInput = document.getElementById('urlInput');
     const titleInput = document.getElementById('titleInput');
     const tagsInput = document.getElementById('tagsInput');
     
-    const url = urlInput.value.trim();
+    if (!urlInput) {
+        showToast('URL入力欄が見つかりません', 'error');
+        return;
+    }
+    
+    let url = urlInput.value.trim();
+    
+    console.log('URL to add:', url);
+    
     if (!url) {
         showToast('URLを入力してください', 'error');
         return;
     }
     
-    // 簡易URL検証
+    // URLをデコードしてから検証
+    try {
+        url = decodeURIComponent(url);
+    } catch (e) {
+        // URL解析に失敗した場合は元のURLを使用
+    }
+    
+    // 簡易URL検証（デコード後）
     if (!url.match(/^https?:\/\/.+/)) {
         showToast('有効なURLを入力してください（http://またはhttps://）', 'error');
         return;
@@ -118,15 +166,22 @@ function addBookmark() {
     if (existingIndex >= 0) {
         appState.bookmarks[existingIndex] = bookmark;
         showToast('ブックマークを更新しました', 'success');
+        console.log('Bookmark updated:', bookmark);
     } else {
         appState.bookmarks.unshift(bookmark);
         showToast('ブックマークを保存しました', 'success');
+        console.log('Bookmark added:', bookmark);
     }
     
     saveData();
     renderBookmarks();
     updateTagFilter();
     updateStatus();
+    
+    // ブックマークレットからの保存完了を通知
+    if (window.opener) {
+        window.opener.postMessage({ type: 'bookmarkSaved', success: true }, '*');
+    }
     
     // フォームクリア
     urlInput.value = '';
@@ -318,6 +373,21 @@ function updateStatus() {
 function toggleBookmarklet() {
     const section = document.getElementById('bookmarkletSection');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    
+    // ブックマークレットを動的に生成
+    if (section.style.display === 'block') {
+        generateBookmarklet();
+    }
+}
+
+// ブックマークレット生成
+function generateBookmarklet() {
+    const bookmarkletLink = document.getElementById('bookmarkletLink');
+    const currentBase = window.location.origin + window.location.pathname;
+    
+    const bookmarkletCode = `javascript:(function(){var currentUrl=encodeURIComponent(window.location.href);var currentTitle=encodeURIComponent(document.title);var base='${currentBase}';console.log('Opening:',base+'?add='+currentUrl+'&title='+currentTitle);var newTab=window.open(base+'?add='+currentUrl+'&title='+currentTitle,'_blank');window.addEventListener('message',function(e){if(e.data.type==='bookmarkSaved'&&e.data.success){if(newTab&&!newTab.closed){newTab.close();}}},false);setTimeout(function(){if(newTab&&!newTab.closed){newTab.close();}},5000);})();`;
+    
+    bookmarkletLink.href = bookmarkletCode;
 }
 
 // データエクスポート

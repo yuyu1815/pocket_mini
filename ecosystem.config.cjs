@@ -1,10 +1,10 @@
 module.exports = {
   apps: [
     {
-      name: 'webapp',
-      script: 'npm',
-      args: 'run dev',
-      cwd: '/home/user/webapp',
+      name: 'pocketmini',
+      script: 'python3',
+      args: '-m http.server 3000',
+      cwd: __dirname,
       env: {
         NODE_ENV: 'development',
         PORT: 3000
