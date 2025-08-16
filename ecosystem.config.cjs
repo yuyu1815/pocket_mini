@@ -1,9 +1,9 @@
 module.exports = {
   apps: [
     {
-      name: 'pocketmini',
-      script: 'python3',
-      args: '-m http.server 3000',
+      name: 'webapp',
+      script: 'npm',
+      args: 'run dev',
       cwd: '/home/user/webapp',
       env: {
         NODE_ENV: 'development',
